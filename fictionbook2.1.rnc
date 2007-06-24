@@ -1,0 +1,402 @@
+#
+# FictionBook 2.1 RelaxNG scheme.
+# (c) 2007 Mikhail Gusarov <dottedmag@dottedmag.net>
+#
+# GPLv2, please comply!
+#
+# History:
+# 1.0 - initial version (2007-06-24)
+#
+
+default namespace = 'http://www.gribuser.ru/xml/fictionbook/2.0'
+namespace xlink = 'http://www.w3.org/1999/xlink'
+namespace genres = 'http://www.gribuser.ru/xml/fictionbook/2.0/genres'
+namespace xs = 'http://www.w3.org/2001/XMLSchema'
+
+grammar {
+   start = element FictionBook {
+   ## This element contains an arbitrary stylesheet that is intepreted by a some
+   ## processing programs, e.g. text/css stylesheets can be used by XSLT
+   ## stylesheets to generate better looking html
+   element stylesheet {
+      attribute type { text },
+      text
+   }*,
+   element description {
+      element title-info { title-info },
+      element src-title-info { title-info }?,
+      element document-info {
+         element author { authorType }+,
+         element program-used { textFieldType }?,
+         element date { dateType },
+         element src-url { xsd:string }*,
+         element src-ocr { textFieldType }?,
+         element id { xsd:token },
+         element version { xsd:float },
+         element history { annotationType }?
+      },
+      element publish-info {
+         element book-name { textFieldType }?,
+         element publisher { textFieldType }?,
+         element city { textFieldType }?,
+         element year { xsd:gYear }?,
+         element isbn { textFieldType }?,
+         element sequence { sequenceType }*
+      }?,
+      element custom-info {
+         attribute info-type { xsd:string },
+         textFieldType
+      }*,
+      element output { shareInstructionType }?,
+      element output { shareInstructionType }?
+   },
+   element body {
+      xmlLang,
+      attribute name { xsd:string }?,
+      element image { imageType }?,
+      element title { titleType }?,
+      epigraph*,
+      section+
+   }+,
+   element binary {
+      attribute id { xsd:ID },
+      attribute content-type { xsd:string },
+      xsd:base64Binary
+   }*
+}
+
+## Information about a single author
+authorType = ((
+   element first-name { textFieldType },
+   element middle-name { textFieldType }?,
+   element last-name { textFieldType },
+   element nickname { textFieldType }?
+) | element nickname { textFieldType }),
+   element home-page { text }*,
+   element email { text }*
+
+id = attribute id { xsd:ID }?
+
+xmlLang = attribute xml:lang { text }?
+
+textFieldType = xmlLang, text
+
+## A human readable date, maybe not exact, with an optional computer readable
+## variant
+dateType = attribute value { xsd:date }?, xmlLang, text
+
+empty-line = element empty-line { empty }
+
+## A title, used in sections, poems and body elements
+titleType = xmlLang, ( element p { pType } | empty-line )*
+
+## An empty element with an image name as an attribute
+imageType = xlinkType, xlinkHref,
+  attribute alt { text }?,
+  attribute title { text }?,
+  id
+
+xlinkType = empty | attribute xlink:type { "simple" }
+xlinkHref = attribute xlink:href { xsd:string }
+
+## A basic paragraph, may include simple formatting inside
+pType = id,
+  attribute style { text }?,
+  styleType
+
+## A citation with an optional citation author at the end
+cite = element cite {
+  id,
+  xmlLang,
+  (element p { pType }
+  | poem
+  | empty-line
+  | element subtitle { pType }
+  | table)*,
+  element text-author { pType }*
+}
+
+## A poem
+poem = element poem {
+   id,
+   xmlLang,
+   ## Poem title
+   element title { titleType }?,
+   ## Poem epigraph(s), if any
+   epigraph*,
+   ## Each poem should have at least one stanza. Stanzas are usually separated
+   ## with empty lines by user agents.
+   element stanza {
+      xmlLang,
+      element title { titleType }?,
+      element subtitle { pType }?,
+      ## An individual line in a stanza
+      element v { pType }+
+   }+,
+   element text-author { pType }*,
+   ## Date this poem was written.
+   element date { dateType }?
+}
+
+## An epigraph
+epigraph = element epigraph {
+   id,
+   (element p { pType }
+    | poem
+    | cite
+    | empty-line)*,
+   element text-author { pType }*
+}
+
+## A cut-down version of <section> used in annotations
+annotationType = (
+   id,
+   xmlLang,
+   (element p { pType }
+    | poem
+    | cite
+    | element subtitle { pType }
+    | table
+    | empty-line)*
+)
+
+## A basic block of a book, can contain more child sections or textual content
+section = element section {
+   id,
+   xmlLang,
+   (
+      element title { titleType }?,
+      epigraph*,
+      element image { imageType }?,
+      element annotation { annotationType }?,
+      (
+         section+
+       |
+         (
+            (element p { pType }
+             | poem
+             | element subtitle { pType }
+             | cite
+             | empty-line
+             | table
+            ),
+            (element p { pType }
+             | element image { imageType }
+             | poem
+             | element subtitle { pType }
+             | cite
+             | empty-line
+             | table
+            )*
+         )
+      )
+   )?
+}
+
+plainContent = element strong { styleType }
+ | element emphasis { styleType }
+ | element style { styleType }
+ | element strikethrough { styleType }
+ | element sub { styleType }
+ | element sup { styleType }
+ | element code { styleType }
+ | inlineImage
+
+## Markup
+styleType =
+   text &
+   (plainContent | element a { linkType })*
+
+## Markup
+namedStyleType = xmlLang,
+   attribute name { xsd:token },
+   (plainContent | element a { linkType })*
+
+## Generic hyperlinks. Cannot be nested. Footnotes should be implemented by
+## links referring to additional bodies in the same document
+linkType = xlinkType,
+   xlinkHref,
+   attribute type { xsd:token}?,
+   plainContent*
+
+## Book sequences
+sequenceType = xmlLang,
+   attribute name { xsd:string },
+   attribute number { xsd:integer }?,
+   element sequence { sequenceType }*
+
+table = element table {
+   attribute id { xsd:ID }?,
+   element tr {
+      attribute align { alignType }?,
+      (element th { tdType }
+       | element td { tdType })+
+   }+
+}
+
+tdType = attribute id { xsd:ID }?,
+   attribute style { xsd:string }?,
+   attribute colspan { xsd:integer }?,
+   attribute rowspan { xsd:integer }?,
+   attribute align { alignType }?,
+   styleType
+
+## Align for table cells
+alignType = "left" | "right" | "center"
+
+## Book (as a book opposite a document) description
+title-info = element genre {
+      attribute match { xsd:integer }?,
+      genreType
+   }+,
+   element author { authorType }+,
+   element book-title { textFieldType },
+   element annotation { annotationType }*,
+   element keywords { textFieldType }?,
+   element date { dateType }?,
+   element coverpage {
+      inlineImage+
+   }?,
+   element lang { xsd:language },
+   element src-lang { xsd:language }?,
+   element translator { authorType }*,
+   element sequence { sequenceType }*
+
+shareInstructionType = attribute mode { "free" | "paid" },
+   attribute include-all { docGenerationInstructionType },
+   attribute price { xsd:float }?,
+   attribute currency { xsd:string },
+   (part-share-instruction-type
+    | output-document-class)*
+
+part-share-instruction-type = element part {
+   xlinkType,
+   xlinkHref,
+   attribute include { docGenerationInstructionType }
+}
+
+output-document-class = element output-document-class {
+   attribute name { xsd:string },
+   attribute create { docGenerationInstructionType }?,
+   attribute price { xsd:float }?,
+   part-share-instruction-type*
+}
+
+docGenerationInstructionType = "require" | "allow" | "deny"
+
+inlineImage = element image {
+   xlinkType,
+   xlinkHref,
+   attribute alt { xsd:string }?
+}
+
+genreType = "sf_history" |
+   "sf_action" |
+   "sf_epic" |
+   "sf_heroic" |
+   "sf_detective" |
+   "sf_cyberpunk" |
+   "sf_space" |
+   "sf_social" |
+   "sf_horror" |
+   "sf_humor" |
+   "sf_fantasy" |
+   "sf" |
+   "det_classic" |
+   "det_police" |
+   "det_action" |
+   "det_irony" |
+   "det_history" |
+   "det_espionage" |
+   "det_crime" |
+   "det_political" |
+   "det_maniac" |
+   "det_hard" |
+   "thriller" |
+   "detective" |
+   "prose_classic" |
+   "prose_history" |
+   "prose_contemporary" |
+   "prose_counter" |
+   "prose_rus_classic" |
+   "prose_su_classics" |
+   "love_contemporary" |
+   "love_history" |
+   "love_detective" |
+   "love_short" |
+   "love_erotica" |
+   "adv_western" |
+   "adv_history" |
+   "adv_indian" |
+   "adv_maritime" |
+   "adv_geo" |
+   "adv_animal" |
+   "adventure" |
+   "child_tale" |
+   "child_verse" |
+   "child_prose" |
+   "child_sf" |
+   "child_det" |
+   "child_adv" |
+   "child_education" |
+   "children" |
+   "poetry" |
+   "dramaturgy" |
+   "antique_ant" |
+   "antique_european" |
+   "antique_russian" |
+   "antique_east" |
+   "antique_myths" |
+   "antique" |
+   "sci_history" |
+   "sci_psychology" |
+   "sci_culture" |
+   "sci_religion" |
+   "sci_philosophy" |
+   "sci_politics" |
+   "sci_business" |
+   "sci_juris" |
+   "sci_linguistic" |
+   "sci_medicine" |
+   "sci_phys" |
+   "sci_math" |
+   "sci_chem" |
+   "sci_biology" |
+   "sci_tech" |
+   "science" |
+   "comp_www" |
+   "comp_programming" |
+   "comp_hard" |
+   "comp_soft" |
+   "comp_db" |
+   "comp_osnet" |
+   "computers" |
+   "ref_encyc" |
+   "ref_dict" |
+   "ref_ref" |
+   "ref_guide" |
+   "reference" |
+   "nonf_biography" |
+   "nonf_publicism" |
+   "nonf_criticism" |
+   "nonfiction" |
+   "design" |
+   "religion_rel" |
+   "religion_esoterics" |
+   "religion_self" |
+   "religion" |
+   "humor_anecdote" |
+   "humor_prose" |
+   "humor_verse" |
+   "humor" |
+   "home_cooking" |
+   "home_pets" |
+   "home_crafts" |
+   "home_entertain" |
+   "home_health" |
+   "home_garden" |
+   "home_diy" |
+   "home_sport" |
+   "home_sex" |
+   "home"
+}
